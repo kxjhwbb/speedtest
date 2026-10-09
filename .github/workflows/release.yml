@@ -88,7 +88,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential ${{ matrix.cross_pkg }}
 
+      - name: Restore Cached OpenSSL
+        id: cache-openssl
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/openssl-target
+          key: openssl-3.2-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_target }}
+
       - name: Build Static OpenSSL for Target Architecture
+        if: steps.cache-openssl.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 -b openssl-3.2 https://github.com/openssl/openssl.git openssl-src
           cd openssl-src
@@ -174,7 +182,15 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      - name: Restore Cached LLVM MinGW Toolchain
+        id: cache-llvm-mingw
+        uses: actions/cache@v4
+        with:
+          path: /opt/llvm-mingw
+          key: llvm-mingw-20261006-ucrt-ubuntu-22.04
+
       - name: Install LLVM MinGW Cross-Compiler Toolchain
+        if: steps.cache-llvm-mingw.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update && sudo apt-get install -y xz-utils
           URL="https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64.tar.xz"
@@ -182,9 +198,19 @@ jobs:
           sudo mkdir -p /opt/llvm-mingw
           sudo tar -xf /tmp/llvm-mingw.tar.xz -C /opt/llvm-mingw --strip-components=1
           rm -f /tmp/llvm-mingw.tar.xz
-          echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
+
+      - name: Add Toolchain to PATH
+        run: echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
+
+      - name: Restore Cached OpenSSL for Windows
+        id: cache-openssl-win
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/openssl-target
+          key: openssl-win-3.2-${{ matrix.arch }}-${{ matrix.target }}
 
       - name: Build Static OpenSSL for Windows
+        if: steps.cache-openssl-win.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 -b openssl-3.2 https://github.com/openssl/openssl.git openssl-win
           cd openssl-win
