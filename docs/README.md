@@ -62,3 +62,4 @@ YYYYMMDD-HHMMSS-brief-topic-title.md
 | 06 | [`20261009-141200-windows-arm64-llvm-mingw-and-winsock-compatibility.md`](20261009-141200-windows-arm64-llvm-mingw-and-winsock-compatibility.md) | Windows 与 Windows ARM64 llvm-mingw 交叉编译及 Winsock 兼容 | 2026-10-09 14:12:00 |
 | 07 | [`20261009-143000-github-actions-cache-acceleration.md`](20261009-143000-github-actions-cache-acceleration.md) | GitHub Actions 多架构依赖缓存加速 (3分钟降至20秒) | 2026-10-09 14:30:00 |
 | 08 | [`20261009-143500-windows-console-utf8-codepage-and-emoji-mojibake.md`](20261009-143500-windows-console-utf8-codepage-and-emoji-mojibake.md) | Windows 控制台 UTF-8 代码页与 Emoji 乱码陷阱 | 2026-10-09 14:35:00 |
+| 09 | [`20261009-143900-arm64-crypto-assembly-hardware-acceleration.md`](20261009-143900-arm64-crypto-assembly-hardware-acceleration.md) | ARM64 硬件加密扩展 (ARMv8 Crypto) 汇编加速与 300M 性能瓶颈陷阱 | 2026-10-09 14:39:00 |

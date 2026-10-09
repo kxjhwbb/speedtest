@@ -47,36 +47,43 @@ jobs:
             target: aarch64-linux-gnu
             cross_pkg: gcc-aarch64-linux-gnu
             openssl_target: linux-aarch64
-            cflags: "-O3 -flto -fomit-frame-pointer"
+            openssl_asm_flag: ""
+            cflags: "-O3 -flto -fomit-frame-pointer -march=armv8-a+crypto+crc"
           - arch: armhf
             target: arm-linux-gnueabihf
             cross_pkg: gcc-arm-linux-gnueabihf
             openssl_target: linux-armv4
+            openssl_asm_flag: "no-asm"
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: armel
             target: arm-linux-gnueabi
             cross_pkg: gcc-arm-linux-gnueabi
             openssl_target: linux-armv4
+            openssl_asm_flag: "no-asm"
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: mipsel
             target: mipsel-linux-gnu
             cross_pkg: gcc-mipsel-linux-gnu
             openssl_target: linux-mips32
+            openssl_asm_flag: "no-asm"
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: mips
             target: mips-linux-gnu
             cross_pkg: gcc-mips-linux-gnu
             openssl_target: linux-mips32
+            openssl_asm_flag: "no-asm"
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: riscv64
             target: riscv64-linux-gnu
             cross_pkg: gcc-riscv64-linux-gnu
             openssl_target: linux64-riscv64
+            openssl_asm_flag: "no-asm"
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: i686
             target: i686-linux-gnu
             cross_pkg: gcc-i686-linux-gnu
             openssl_target: linux-x86
+            openssl_asm_flag: "no-asm"
             cflags: "-O3 -flto -fomit-frame-pointer -m32"
 
     steps:
@@ -93,7 +100,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/openssl-target
-          key: openssl-3.2-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_target }}
+          key: openssl-3.2-v2-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_target }}-${{ matrix.openssl_asm_flag }}
 
       - name: Build Static OpenSSL for Target Architecture
         if: steps.cache-openssl.outputs.cache-hit != 'true'
@@ -103,7 +110,7 @@ jobs:
 
           ./Configure ${{ matrix.openssl_target }} \
             --cross-compile-prefix=${{ matrix.target }}- \
-            no-shared no-tests no-docs no-legacy no-engine no-ui-console no-asm \
+            no-shared no-tests no-docs no-legacy no-engine no-ui-console ${{ matrix.openssl_asm_flag }} \
             --prefix=$GITHUB_WORKSPACE/openssl-target \
             --openssldir=$GITHUB_WORKSPACE/openssl-target
 
@@ -175,9 +182,11 @@ jobs:
           - arch: x86_64
             target: x86_64-w64-mingw32
             openssl_target: mingw64
+            openssl_asm_flag: ""
           - arch: arm64
             target: aarch64-w64-mingw32
             openssl_target: mingw64
+            openssl_asm_flag: "no-asm"
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -207,7 +216,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/openssl-target
-          key: openssl-win-3.2-${{ matrix.arch }}-${{ matrix.target }}
+          key: openssl-win-3.2-v2-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_asm_flag }}
 
       - name: Build Static OpenSSL for Windows
         if: steps.cache-openssl-win.outputs.cache-hit != 'true'
@@ -217,7 +226,7 @@ jobs:
 
           ./Configure ${{ matrix.openssl_target }} \
             --cross-compile-prefix=${{ matrix.target }}- \
-            no-shared no-tests no-docs no-legacy no-engine no-ui-console no-asm \
+            no-shared no-tests no-docs no-legacy no-engine no-ui-console ${{ matrix.openssl_asm_flag }} \
             --prefix=$GITHUB_WORKSPACE/openssl-target \
             --openssldir=$GITHUB_WORKSPACE/openssl-target
 
