@@ -1,5 +1,7 @@
 # 🚀 bb-speedtest
 
+[**English**](README.md) | [**中文文档**](README_CN.md)
+
 **bb-speedtest** is a high-performance, lightweight, zero-dependency Speedtest CLI client written in pure C. Designed specifically for embedded Linux devices (OpenWrt / Padavan / Cudy routers), NAS, development boards (Raspberry Pi / RISC-V), and servers.
 
 ---
