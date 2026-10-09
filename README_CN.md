@@ -20,7 +20,7 @@
 
 ## 🎯 支持架构与预编译文件列表
 
-每次在 GitHub 提交 Release 标签时，GitHub Actions 会自动编译并发布以下 10 个平台的静态二进制文件：
+每次在 GitHub 提交 Release 标签时，GitHub Actions 会自动编译并发布以下 11 个平台的静态二进制文件：
 
 | 系统 / 架构 | 二进制文件名 | 适用设备 |
 | :--- | :--- | :--- |
@@ -33,7 +33,8 @@
 | **Linux riscv64** | `bb-speedtest-linux-riscv64` | RISC-V 架构开发板与服务器 |
 | **Linux i686** | `bb-speedtest-linux-i686` | 32位 x86 旧设备 |
 | **macOS Apple Silicon** | `bb-speedtest-darwin-arm64` | Apple Silicon Mac (M1 / M2 / M3 / M4) |
-| **Windows x86_64** | `bb-speedtest-windows-x86_64.exe` | Windows 10 / 11 / Server (64位) |
+| **Windows x86_64** | `bb-speedtest-windows-x86_64.exe` | Windows 10 / 11 / Server (x86_64 64位) |
+| **Windows ARM64** | `bb-speedtest-windows-arm64.exe` | Windows 11 on ARM (骁龙 X Elite、Surface Pro ARM 等) |
 
 ---
 

@@ -159,36 +159,61 @@ jobs:
           path: bb-speedtest-darwin-arm64
 
   build-windows:
-    name: Build Windows (x86_64)
-    runs-on: windows-latest
+    name: Build Windows (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86_64-w64-mingw32
+            openssl_target: mingw64
+          - arch: arm64
+            target: aarch64-w64-mingw32
+            openssl_target: mingw-arm64
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 Toolchain
-        uses: msys2/setup-msys2@v2
+      - name: Setup LLVM MinGW
+        uses: mstorsjo/setup-llvm-mingw@v3
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-zstd
+          target: ${{ matrix.target }}
+
+      - name: Build Static OpenSSL for Windows
+        run: |
+          git clone --depth 1 -b openssl-3.2 https://github.com/openssl/openssl.git openssl-win
+          cd openssl-win
+
+          ./Configure ${{ matrix.openssl_target }} \
+            --cross-compile-prefix=${{ matrix.target }}- \
+            no-shared no-tests no-docs no-legacy no-engine no-ui-console no-asm \
+            --prefix=$GITHUB_WORKSPACE/openssl-target \
+            --openssldir=$GITHUB_WORKSPACE/openssl-target
+
+          make -j$(nproc) build_libs
+          make install_dev
+          cd ..
 
       - name: Compile Static Windows Binary
-        shell: msys2 {0}
         run: |
-          gcc -O3 -flto -fomit-frame-pointer -Wall speedtest.c -o bb-speedtest-windows-x86_64.exe \
-            -static -lssl -lcrypto -lws2_32 -lcrypt32 -lz -lzstd -lpthread
-          strip bb-speedtest-windows-x86_64.exe
-          ls -lh bb-speedtest-windows-x86_64.exe
+          ${{ matrix.target }}-clang -O3 -flto -fomit-frame-pointer -Wall \
+            -I$GITHUB_WORKSPACE/openssl-target/include \
+            -L$GITHUB_WORKSPACE/openssl-target/lib \
+            -L$GITHUB_WORKSPACE/openssl-target/lib64 \
+            speedtest.c -o bb-speedtest-windows-${{ matrix.arch }}.exe \
+            -static -lssl -lcrypto -lws2_32 -lgdi32 -lcrypt32 -lbcrypt -lpthread
+
+          ${{ matrix.target }}-strip bb-speedtest-windows-${{ matrix.arch }}.exe || true
+          chmod +x bb-speedtest-windows-${{ matrix.arch }}.exe
+          file bb-speedtest-windows-${{ matrix.arch }}.exe
+          ls -lh bb-speedtest-windows-${{ matrix.arch }}.exe
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bb-speedtest-windows-x86_64.exe
-          path: bb-speedtest-windows-x86_64.exe
+          name: bb-speedtest-windows-${{ matrix.arch }}.exe
+          path: bb-speedtest-windows-${{ matrix.arch }}.exe
 
   release:
     name: Create GitHub Release

@@ -37,6 +37,24 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+static const char* my_strcasestr(const char *haystack, const char *needle) {
+    if (!haystack || !needle) return NULL;
+    size_t nlen = strlen(needle);
+    if (nlen == 0) return haystack;
+    for (; *haystack; haystack++) {
+#ifdef _WIN32
+        if (_strnicmp(haystack, needle, nlen) == 0) {
+            return haystack;
+        }
+#else
+        if (strncasecmp(haystack, needle, nlen) == 0) {
+            return haystack;
+        }
+#endif
+    }
+    return NULL;
+}
+
 #define MAX_SERVERS 64
 #define DEFAULT_BLOCK_SIZE 25000000ULL
 #define BUF_SIZE (128 * 1024)
@@ -542,7 +560,7 @@ static void* download_worker_thread(void *arg) {
                 char *hdr_end = strstr(header_buf + search_start, "\r\n\r\n");
                 if (hdr_end) {
                     header_done = 1;
-                    char *cl_pos = strcasestr(header_buf, "Content-Length:");
+                    const char *cl_pos = my_strcasestr(header_buf, "Content-Length:");
                     if (cl_pos) {
                         content_length = strtoll(cl_pos + 15, NULL, 10);
                     }
