@@ -2,6 +2,8 @@
 
 [**English**](README.md) | [**中文文档**](README_CN.md)
 
+> 🤖 **本项目由 人类 + AI 协同精心打造 (Crafted with ❤️ through Human + AI Collaboration)**
+
 **bb-speedtest** 是一款高性能、轻量级、零依赖的跨平台 Speedtest 测速客户端（纯 C 语言原生实现）。专为嵌入式 Linux 设备（OpenWrt / Padavan / Cudy 等路由器）、NAS、开发板（树莓派 / RISC-V）以及服务器设计。
 
 ---
