@@ -129,7 +129,7 @@ jobs:
           path: bb-speedtest-linux-${{ matrix.arch }}
 
   build-macos:
-    name: Build macOS (Universal Binary)
+    name: Build macOS (Apple Silicon arm64)
     runs-on: macos-latest
     steps:
       - name: Checkout Source Code
@@ -139,7 +139,7 @@ jobs:
         run: |
           brew install openssl@3
 
-      - name: Compile Native Apple Silicon Binary
+      - name: Compile macOS Binary
         run: |
           OPENSSL_DIR=$(brew --prefix openssl@3)
           clang -O3 -Wall \
@@ -158,9 +158,41 @@ jobs:
           name: bb-speedtest-darwin-arm64
           path: bb-speedtest-darwin-arm64
 
+  build-windows:
+    name: Build Windows (x86_64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 Toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-zstd
+
+      - name: Compile Static Windows Binary
+        shell: msys2 {0}
+        run: |
+          gcc -O3 -flto -fomit-frame-pointer -Wall speedtest.c -o bb-speedtest-windows-x86_64.exe \
+            -static -lssl -lcrypto -lws2_32 -lcrypt32 -lz -lzstd -lpthread
+          strip bb-speedtest-windows-x86_64.exe
+          ls -lh bb-speedtest-windows-x86_64.exe
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb-speedtest-windows-x86_64.exe
+          path: bb-speedtest-windows-x86_64.exe
+
   release:
     name: Create GitHub Release
-    needs: [build-linux-x86_64, build-linux-cross, build-macos]
+    needs: [build-linux-x86_64, build-linux-cross, build-macos, build-windows]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

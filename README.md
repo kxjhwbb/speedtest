@@ -33,7 +33,7 @@ Precompiled static binaries for 10 architectures are automatically built and pub
 | **Linux riscv64** | `bb-speedtest-linux-riscv64` | RISC-V 64-bit SBCs and Servers |
 | **Linux i686** | `bb-speedtest-linux-i686` | Legacy 32-bit x86 Systems |
 | **macOS Apple Silicon** | `bb-speedtest-darwin-arm64` | Apple Silicon Mac (M1 / M2 / M3 / M4) |
-| **macOS Intel** | `bb-speedtest-darwin-x86_64` | Intel-based Mac |
+| **Windows x86_64** | `bb-speedtest-windows-x86_64.exe` | Windows 10 / 11 / Server (64-bit) |
 
 ---
 

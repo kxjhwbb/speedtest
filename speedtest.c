@@ -5,16 +5,34 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include <time.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <netdb.h>
 #include <fcntl.h>
+
+#ifdef _WIN32
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #include <windows.h>
+  #include <getopt.h>
+  #define CLOSE_SOCKET closesocket
+  #define SLEEP_SEC(s) Sleep((s) * 1000)
+  #define USLEEP(us) Sleep((us) / 1000)
+  typedef SOCKET socket_t;
+  #define IS_INVALID_SOCKET(s) ((s) == INVALID_SOCKET)
+#else
+  #include <unistd.h>
+  #include <sys/types.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <netinet/tcp.h>
+  #include <netdb.h>
+  #define CLOSE_SOCKET close
+  #define SLEEP_SEC(s) sleep(s)
+  #define USLEEP(us) usleep(us)
+  typedef int socket_t;
+  #define IS_INVALID_SOCKET(s) ((s) < 0)
+#endif
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -61,13 +79,24 @@ static void sigint_handler(int sig) {
     g_running = 0;
 }
 
+// 跨平台线程安全随机数生成 (Xorshift32)
+static inline uint32_t fast_rand(unsigned int *seed) {
+    uint32_t x = *seed;
+    if (x == 0) x = (uint32_t)(uintptr_t)seed ^ 0x5bf03635;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *seed = x;
+    return x;
+}
+
 static inline void generate_uuid(char *out, size_t out_len, unsigned int *seed) {
     snprintf(out, out_len, "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
-             rand_r(seed) & 0xffff, rand_r(seed) & 0xffff,
-             rand_r(seed) & 0xffff,
-             (rand_r(seed) & 0x0fff) | 0x4000,
-             (rand_r(seed) & 0x3fff) | 0x8000,
-             rand_r(seed) & 0xffff, rand_r(seed) & 0xffff, rand_r(seed) & 0xffff);
+             fast_rand(seed) & 0xffff, fast_rand(seed) & 0xffff,
+             fast_rand(seed) & 0xffff,
+             (fast_rand(seed) & 0x0fff) | 0x4000,
+             (fast_rand(seed) & 0x3fff) | 0x8000,
+             fast_rand(seed) & 0xffff, fast_rand(seed) & 0xffff, fast_rand(seed) & 0xffff);
 }
 
 static void parse_url(const char *url) {
@@ -125,39 +154,59 @@ static void parse_url(const char *url) {
     }
 }
 
-static int connect_socket(const char *host, const char *port, int timeout_sec) {
+static socket_t connect_socket(const char *host, const char *port, int timeout_sec) {
     struct addrinfo hints, *res, *rp;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     if (getaddrinfo(host, port, &hints, &res) != 0) {
+#ifdef _WIN32
+        return INVALID_SOCKET;
+#else
         return -1;
+#endif
     }
 
-    int fd = -1;
+    socket_t fd;
+#ifdef _WIN32
+    fd = INVALID_SOCKET;
+#else
+    fd = -1;
+#endif
+
     for (rp = res; rp != NULL; rp = rp->ai_next) {
         fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (fd == -1) continue;
+        if (IS_INVALID_SOCKET(fd)) continue;
 
+#ifdef _WIN32
+        DWORD tv = timeout_sec * 1000;
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
+#else
         struct timeval tv;
         tv.tv_sec = timeout_sec;
         tv.tv_usec = 0;
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
+#endif
 
         int sock_buf = SOCK_BUF_SIZE;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sock_buf, sizeof(sock_buf));
-        setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sock_buf, sizeof(sock_buf));
+        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&sock_buf, sizeof(sock_buf));
+        setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*)&sock_buf, sizeof(sock_buf));
 
         int flag = 1;
-        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(int));
 
-        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) {
+        if (connect(fd, rp->ai_addr, (int)rp->ai_addrlen) == 0) {
             break;
         }
-        close(fd);
+        CLOSE_SOCKET(fd);
+#ifdef _WIN32
+        fd = INVALID_SOCKET;
+#else
         fd = -1;
+#endif
     }
 
     freeaddrinfo(res);
@@ -165,20 +214,20 @@ static int connect_socket(const char *host, const char *port, int timeout_sec) {
 }
 
 static char* https_get_string(const char *host, const char *port, const char *path) {
-    int fd = connect_socket(host, port, 5);
-    if (fd < 0) return NULL;
+    socket_t fd = connect_socket(host, port, 5);
+    if (IS_INVALID_SOCKET(fd)) return NULL;
 
     SSL *ssl = SSL_new(g_ssl_ctx);
     if (!ssl) {
-        close(fd);
+        CLOSE_SOCKET(fd);
         return NULL;
     }
-    SSL_set_fd(ssl, fd);
+    SSL_set_fd(ssl, (int)fd);
     SSL_set_tlsext_host_name(ssl, host);
 
     if (SSL_connect(ssl) <= 0) {
         SSL_free(ssl);
-        close(fd);
+        CLOSE_SOCKET(fd);
         return NULL;
     }
 
@@ -191,14 +240,14 @@ static char* https_get_string(const char *host, const char *port, const char *pa
              "Connection: close\r\n\r\n",
              path, host);
 
-    SSL_write(ssl, req, strlen(req));
+    SSL_write(ssl, req, (int)strlen(req));
 
     size_t cap = 64 * 1024;
     size_t len = 0;
     char *buf = malloc(cap);
     if (!buf) {
         SSL_free(ssl);
-        close(fd);
+        CLOSE_SOCKET(fd);
         return NULL;
     }
 
@@ -217,7 +266,7 @@ static char* https_get_string(const char *host, const char *port, const char *pa
 
     SSL_shutdown(ssl);
     SSL_free(ssl);
-    close(fd);
+    CLOSE_SOCKET(fd);
 
     char *body = strstr(buf, "\r\n\r\n");
     if (body) {
@@ -281,20 +330,20 @@ static double measure_latency(const char *host_with_port) {
     struct timespec ts_start, ts_end;
     clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
-    int fd = connect_socket(host, port, 2);
-    if (fd < 0) return 9999.0;
+    socket_t fd = connect_socket(host, port, 2);
+    if (IS_INVALID_SOCKET(fd)) return 9999.0;
 
     SSL *ssl = SSL_new(g_ssl_ctx);
     if (!ssl) {
-        close(fd);
+        CLOSE_SOCKET(fd);
         return 9999.0;
     }
-    SSL_set_fd(ssl, fd);
+    SSL_set_fd(ssl, (int)fd);
     SSL_set_tlsext_host_name(ssl, host);
 
     if (SSL_connect(ssl) <= 0) {
         SSL_free(ssl);
-        close(fd);
+        CLOSE_SOCKET(fd);
         return 9999.0;
     }
 
@@ -305,7 +354,7 @@ static double measure_latency(const char *host_with_port) {
              "User-Agent: Speedtest-C/3.0\r\n"
              "Connection: close\r\n\r\n",
              host, port);
-    SSL_write(ssl, req, strlen(req));
+    SSL_write(ssl, req, (int)strlen(req));
 
     char buf[256];
     SSL_read(ssl, buf, sizeof(buf));
@@ -314,7 +363,7 @@ static double measure_latency(const char *host_with_port) {
 
     SSL_shutdown(ssl);
     SSL_free(ssl);
-    close(fd);
+    CLOSE_SOCKET(fd);
 
     double ms = (ts_end.tv_sec - ts_start.tv_sec) * 1000.0 +
                 (ts_end.tv_nsec - ts_start.tv_nsec) / 1e6;
@@ -429,9 +478,9 @@ static void* download_worker_thread(void *arg) {
     uint32_t local_completed = 0;
 
     while (g_running) {
-        int fd = connect_socket(g_host, g_port, targ->timeout);
-        if (fd < 0) {
-            usleep(100000);
+        socket_t fd = connect_socket(g_host, g_port, targ->timeout);
+        if (IS_INVALID_SOCKET(fd)) {
+            USLEEP(100000);
             continue;
         }
 
@@ -439,16 +488,16 @@ static void* download_worker_thread(void *arg) {
         if (g_is_https) {
             ssl = SSL_new(g_ssl_ctx);
             if (!ssl) {
-                close(fd);
-                usleep(100000);
+                CLOSE_SOCKET(fd);
+                USLEEP(100000);
                 continue;
             }
-            SSL_set_fd(ssl, fd);
+            SSL_set_fd(ssl, (int)fd);
             SSL_set_tlsext_host_name(ssl, g_host);
             if (SSL_connect(ssl) <= 0) {
                 SSL_free(ssl);
-                close(fd);
-                usleep(100000);
+                CLOSE_SOCKET(fd);
+                USLEEP(100000);
                 continue;
             }
         }
@@ -468,7 +517,7 @@ static void* download_worker_thread(void *arg) {
                      "Connection: keep-alive\r\n\r\n",
                      g_path, sep, nocache, guid, g_host, g_port);
 
-            int write_ret = g_is_https ? SSL_write(ssl, req, req_len) : send(fd, req, req_len, 0);
+            int write_ret = g_is_https ? SSL_write(ssl, req, req_len) : (int)send(fd, req, req_len, 0);
             if (write_ret <= 0) break;
 
             int header_done = 0;
@@ -478,7 +527,7 @@ static void* download_worker_thread(void *arg) {
             int header_len = 0;
 
             while (g_running && !header_done) {
-                int n = g_is_https ? SSL_read(ssl, recv_buf, BUF_SIZE) : recv(fd, recv_buf, BUF_SIZE, 0);
+                int n = g_is_https ? SSL_read(ssl, recv_buf, BUF_SIZE) : (int)recv(fd, recv_buf, BUF_SIZE, 0);
                 if (n <= 0) break;
 
                 int search_start = header_len > 3 ? header_len - 3 : 0;
@@ -516,7 +565,7 @@ static void* download_worker_thread(void *arg) {
                         to_read = (size_t)(content_length - body_read);
                     }
 
-                    int n = g_is_https ? SSL_read(ssl, recv_buf, to_read) : recv(fd, recv_buf, to_read, 0);
+                    int n = g_is_https ? SSL_read(ssl, recv_buf, (int)to_read) : (int)recv(fd, recv_buf, (int)to_read, 0);
                     if (n <= 0) break;
 
                     local_bytes += n;
@@ -539,7 +588,7 @@ static void* download_worker_thread(void *arg) {
                 }
             } else {
                 while (g_running) {
-                    int n = g_is_https ? SSL_read(ssl, recv_buf, BUF_SIZE) : recv(fd, recv_buf, BUF_SIZE, 0);
+                    int n = g_is_https ? SSL_read(ssl, recv_buf, BUF_SIZE) : (int)recv(fd, recv_buf, BUF_SIZE, 0);
                     if (n <= 0) break;
                     local_bytes += n;
                 }
@@ -556,7 +605,7 @@ static void* download_worker_thread(void *arg) {
             SSL_shutdown(ssl);
             SSL_free(ssl);
         }
-        close(fd);
+        CLOSE_SOCKET(fd);
     }
 
     if (local_bytes > 0) {
@@ -579,9 +628,9 @@ static void* upload_worker_thread(void *arg) {
     uint32_t local_completed = 0;
 
     while (g_running) {
-        int fd = connect_socket(g_host, g_port, targ->timeout);
-        if (fd < 0) {
-            usleep(100000);
+        socket_t fd = connect_socket(g_host, g_port, targ->timeout);
+        if (IS_INVALID_SOCKET(fd)) {
+            USLEEP(100000);
             continue;
         }
 
@@ -589,16 +638,16 @@ static void* upload_worker_thread(void *arg) {
         if (g_is_https) {
             ssl = SSL_new(g_ssl_ctx);
             if (!ssl) {
-                close(fd);
-                usleep(100000);
+                CLOSE_SOCKET(fd);
+                USLEEP(100000);
                 continue;
             }
-            SSL_set_fd(ssl, fd);
+            SSL_set_fd(ssl, (int)fd);
             SSL_set_tlsext_host_name(ssl, g_host);
             if (SSL_connect(ssl) <= 0) {
                 SSL_free(ssl);
-                close(fd);
-                usleep(100000);
+                CLOSE_SOCKET(fd);
+                USLEEP(100000);
                 continue;
             }
         }
@@ -618,7 +667,7 @@ static void* upload_worker_thread(void *arg) {
                      "Connection: keep-alive\r\n\r\n",
                      nocache, guid, g_host, g_port, (unsigned long)g_block_size);
 
-            int write_ret = g_is_https ? SSL_write(ssl, req_hdr, hdr_len) : send(fd, req_hdr, hdr_len, 0);
+            int write_ret = g_is_https ? SSL_write(ssl, req_hdr, hdr_len) : (int)send(fd, req_hdr, hdr_len, 0);
             if (write_ret <= 0) break;
 
             uint64_t body_sent = 0;
@@ -628,7 +677,7 @@ static void* upload_worker_thread(void *arg) {
                     to_send = (size_t)(g_block_size - body_sent);
                 }
 
-                int n = g_is_https ? SSL_write(ssl, g_upload_buf, to_send) : send(fd, g_upload_buf, to_send, 0);
+                int n = g_is_https ? SSL_write(ssl, g_upload_buf, (int)to_send) : (int)send(fd, g_upload_buf, (int)to_send, 0);
                 if (n <= 0) break;
 
                 body_sent += n;
@@ -641,7 +690,7 @@ static void* upload_worker_thread(void *arg) {
             }
 
             if (body_sent >= g_block_size && g_running) {
-                int resp_n = g_is_https ? SSL_read(ssl, resp_buf, sizeof(resp_buf) - 1) : recv(fd, resp_buf, sizeof(resp_buf) - 1, 0);
+                int resp_n = g_is_https ? SSL_read(ssl, resp_buf, sizeof(resp_buf) - 1) : (int)recv(fd, resp_buf, sizeof(resp_buf) - 1, 0);
                 if (resp_n > 0) {
                     local_completed++;
                     if (local_completed >= 1) {
@@ -665,7 +714,7 @@ static void* upload_worker_thread(void *arg) {
             SSL_shutdown(ssl);
             SSL_free(ssl);
         }
-        close(fd);
+        CLOSE_SOCKET(fd);
     }
 
     if (local_bytes > 0) {
@@ -711,7 +760,7 @@ static double run_benchmark(int is_upload, int threads, int duration, int timeou
     uint64_t last_bytes = 0;
 
     for (int sec = 1; sec <= duration && g_running; sec++) {
-        sleep(1);
+        SLEEP_SEC(1);
         clock_gettime(CLOCK_MONOTONIC, &now_ts);
 
         double elapsed = (now_ts.tv_sec - start_ts.tv_sec) + 
@@ -796,6 +845,14 @@ int main(int argc, char *argv[]) {
 
     memset(g_upload_buf, 'x', sizeof(g_upload_buf));
 
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        fprintf(stderr, "WSAStartup failed\n");
+        return 1;
+    }
+#endif
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--only-upload") == 0) {
             only_upload = 1;
@@ -837,13 +894,18 @@ int main(int argc, char *argv[]) {
             case 'h':
             default:
                 print_usage(argv[0]);
+#ifdef _WIN32
+                WSACleanup();
+#endif
                 return 0;
         }
     }
 
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigint_handler);
+#ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
+#endif
 
     SSL_library_init();
     OpenSSL_add_all_algorithms();
@@ -853,6 +915,9 @@ int main(int argc, char *argv[]) {
     g_ssl_ctx = SSL_CTX_new(method);
     if (!g_ssl_ctx) {
         fprintf(stderr, "SSL_CTX initialization failed\n");
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return 1;
     }
     
@@ -871,6 +936,9 @@ int main(int argc, char *argv[]) {
                 ping_all_servers();
                 list_servers();
                 SSL_CTX_free(g_ssl_ctx);
+#ifdef _WIN32
+                WSACleanup();
+#endif
                 return 0;
             }
 
@@ -885,6 +953,9 @@ int main(int argc, char *argv[]) {
                 if (selected_idx < 0) {
                     fprintf(stderr, "❌ Server ID %s not found! Use -L to view available servers.\n", target_id);
                     SSL_CTX_free(g_ssl_ctx);
+#ifdef _WIN32
+                    WSACleanup();
+#endif
                     return 1;
                 }
                 printf("📶 Measuring latency to specified server...\n");
@@ -946,5 +1017,8 @@ int main(int argc, char *argv[]) {
     printf("============================================================\n");
 
     SSL_CTX_free(g_ssl_ctx);
+#ifdef _WIN32
+    WSACleanup();
+#endif
     return 0;
 }
