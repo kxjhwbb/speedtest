@@ -15,90 +15,136 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux (${{ matrix.target.arch }})
+  build-linux-x86_64:
+    name: Build Linux (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libzstd-dev
+
+      - name: Compile Static Binary
+        run: |
+          gcc -O3 -flto -fomit-frame-pointer -Wall speedtest.c -o bb-speedtest-linux-x86_64 -static -lssl -lcrypto -lz -lzstd -lpthread -ldl
+          strip bb-speedtest-linux-x86_64
+          chmod +x bb-speedtest-linux-x86_64
+          file bb-speedtest-linux-x86_64
+          ls -lh bb-speedtest-linux-x86_64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb-speedtest-linux-x86_64
+          path: bb-speedtest-linux-x86_64
+
+  build-linux-cross:
+    name: Build Linux (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - arch: x86_64
-            cross_pkg: ""
-            cc: gcc
-            strip: strip
-            cflags: "-O3 -flto -fomit-frame-pointer"
+        include:
           - arch: aarch64
-            cross_pkg: "gcc-aarch64-linux-gnu"
-            cc: aarch64-linux-gnu-gcc
-            strip: aarch64-linux-gnu-strip
+            target: aarch64-linux-gnu
+            cross_pkg: gcc-aarch64-linux-gnu
             cflags: "-O3 -flto -fomit-frame-pointer -march=armv8-a+crypto+crc"
           - arch: armhf
-            cross_pkg: "gcc-arm-linux-gnueabihf"
-            cc: arm-linux-gnueabihf-gcc
-            strip: arm-linux-gnueabihf-strip
+            target: arm-linux-gnueabihf
+            cross_pkg: gcc-arm-linux-gnueabihf
             cflags: "-O3 -flto -fomit-frame-pointer -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard"
           - arch: armel
-            cross_pkg: "gcc-arm-linux-gnueabi"
-            cc: arm-linux-gnueabi-gcc
-            strip: arm-linux-gnueabi-strip
+            target: arm-linux-gnueabi
+            cross_pkg: gcc-arm-linux-gnueabi
             cflags: "-O3 -flto -fomit-frame-pointer -march=armv5te"
           - arch: mipsel
-            cross_pkg: "gcc-mipsel-linux-gnu"
-            cc: mipsel-linux-gnu-gcc
-            strip: mipsel-linux-gnu-strip
+            target: mipsel-linux-gnu
+            cross_pkg: gcc-mipsel-linux-gnu
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: mips
-            cross_pkg: "gcc-mips-linux-gnu"
-            cc: mips-linux-gnu-gcc
-            strip: mips-linux-gnu-strip
+            target: mips-linux-gnu
+            cross_pkg: gcc-mips-linux-gnu
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: riscv64
-            cross_pkg: "gcc-riscv64-linux-gnu"
-            cc: riscv64-linux-gnu-gcc
-            strip: riscv64-linux-gnu-strip
+            target: riscv64-linux-gnu
+            cross_pkg: gcc-riscv64-linux-gnu
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: i686
-            cross_pkg: "gcc-i686-linux-gnu"
-            cc: i686-linux-gnu-gcc
-            strip: i686-linux-gnu-strip
+            target: i686-linux-gnu
+            cross_pkg: gcc-i686-linux-gnu
             cflags: "-O3 -flto -fomit-frame-pointer -m32"
 
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Install Toolchain and Dependencies
+      - name: Install Cross Toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libzstd-dev
-          if [ -n "${{ matrix.target.cross_pkg }}" ]; then
-            sudo apt-get install -y ${{ matrix.target.cross_pkg }}
-          fi
+          sudo apt-get install -y build-essential ${{ matrix.cross_pkg }}
 
-      - name: Compile Static Binary
+      - name: Build Static OpenSSL for Target Architecture
         run: |
-          ${{ matrix.target.cc }} ${{ matrix.target.cflags }} -Wall speedtest.c -o bb-speedtest-linux-${{ matrix.target.arch }} -static -lssl -lcrypto -lz -lzstd -lpthread -ldl || \
-          ${{ matrix.target.cc }} ${{ matrix.target.cflags }} -Wall speedtest.c -o bb-speedtest-linux-${{ matrix.target.arch }} -static -lssl -lcrypto -lpthread -ldl || \
-          ${{ matrix.target.cc }} ${{ matrix.target.cflags }} -Wall speedtest.c -o bb-speedtest-linux-${{ matrix.target.arch }} -lssl -lcrypto -lpthread -ldl
+          # 快速克隆精简版 OpenSSL 源码并针对目标架构做极速静态构建 (约 30-40 秒)
+          git clone --depth 1 -b openssl-3.2 https://github.com/openssl/openssl.git openssl-src
+          cd openssl-src
+          
+          # 根据 target 映射 OpenSSL Configure 平台名
+          OPENSSL_ARCH=""
+          case "${{ matrix.arch }}" in
+            aarch64) OPENSSL_ARCH="linux-aarch64" ;;
+            armhf)   OPENSSL_ARCH="linux-armv4 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard" ;;
+            armel)   OPENSSL_ARCH="linux-armv4" ;;
+            mipsel)  OPENSSL_ARCH="linux-mips32" ;;
+            mips)    OPENSSL_ARCH="linux-mips32" ;;
+            riscv64) OPENSSL_ARCH="linux64-riscv64" ;;
+            i686)    OPENSSL_ARCH="linux-x86" ;;
+          esac
 
-          ${{ matrix.target.strip }} bb-speedtest-linux-${{ matrix.target.arch }} || true
-          chmod +x bb-speedtest-linux-${{ matrix.target.arch }}
-          file bb-speedtest-linux-${{ matrix.target.arch }}
-          ls -lh bb-speedtest-linux-${{ matrix.target.arch }}
+          ./Configure ${OPENSSL_ARCH} \
+            --cross-compile-prefix=${{ matrix.target }}- \
+            no-shared no-tests no-docs no-legacy no-engine no-ui-console \
+            --prefix=$GITHUB_WORKSPACE/openssl-target \
+            --openssldir=$GITHUB_WORKSPACE/openssl-target
+
+          make -j$(nproc) build_libs
+          make install_dev
+          cd ..
+
+      - name: Compile Static bb-speedtest Binary
+        run: |
+          ${{ matrix.target }}-gcc ${{ matrix.cflags }} -Wall \
+            -I$GITHUB_WORKSPACE/openssl-target/include \
+            -L$GITHUB_WORKSPACE/openssl-target/lib \
+            -L$GITHUB_WORKSPACE/openssl-target/lib64 \
+            speedtest.c -o bb-speedtest-linux-${{ matrix.arch }} \
+            -static -lssl -lcrypto -lpthread -ldl
+
+          ${{ matrix.target }}-strip bb-speedtest-linux-${{ matrix.arch }} || true
+          chmod +x bb-speedtest-linux-${{ matrix.arch }}
+          file bb-speedtest-linux-${{ matrix.arch }}
+          ls -lh bb-speedtest-linux-${{ matrix.arch }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bb-speedtest-linux-${{ matrix.target.arch }}
-          path: bb-speedtest-linux-${{ matrix.target.arch }}
+          name: bb-speedtest-linux-${{ matrix.arch }}
+          path: bb-speedtest-linux-${{ matrix.arch }}
 
   build-macos:
-    name: Build macOS (${{ matrix.arch }})
-    runs-on: macos-latest
+    name: Build macOS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, arm64]
+        include:
+          - os: macos-13
+            arch: x86_64
+          - os: macos-latest
+            arch: arm64
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -110,7 +156,7 @@ jobs:
       - name: Compile macOS Binary
         run: |
           OPENSSL_DIR=$(brew --prefix openssl@3)
-          clang -O3 -Wall -target ${{ matrix.arch }}-apple-macos11 \
+          clang -O3 -Wall \
             -I${OPENSSL_DIR}/include \
             -L${OPENSSL_DIR}/lib \
             speedtest.c -o bb-speedtest-darwin-${{ matrix.arch }} \
@@ -128,7 +174,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-linux, build-macos]
+    needs: [build-linux-x86_64, build-linux-cross, build-macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
