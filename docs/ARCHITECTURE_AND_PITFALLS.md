@@ -16,6 +16,7 @@
 3. [跨架构 OpenSSL 静态编译与汇编兼容性](#3-跨架构-openssl-静态编译与汇编兼容性)
 4. [GitHub Actions CI/CD 踩坑实录](#4-github-actions-cicd-踩坑实录)
 5. [高性能网络测速引擎的损耗优化法则](#5-高性能网络测速引擎的损耗优化法则)
+6. [Windows 与 Windows ARM64 交叉编译及 Winsock 兼容避坑](#6-windows-与-windows-arm64-交叉编译及-winsock-兼容避坑)
 
 ---
 
@@ -130,3 +131,27 @@ collect2: error: ld returned 1 exit status
    - 禁用 Nagle 算法，避免微小请求头的攒包延迟。
 4. **批量原子变量同步（消除 CPU Cacheline 乒乓效应）**：
    - 各工作线程内部维护局部累加器，积累满 1MB 后再通过 `atomic_fetch_add_explicit(..., relaxed)` 批量回写全局计数器，避免多核心跨缓存行写竞争。
+
+---
+
+## 6. Windows 与 Windows ARM64 交叉编译及 Winsock 兼容避坑
+
+### 🔴 踩坑现象 1：MinGW / MSYS2 下缺少 `strcasestr`
+- Windows MinGW-w64 报错：`implicit declaration of function 'strcasestr'` 或 `undefined reference to 'strcasestr'`。
+- **原因**：`strcasestr` 是 GNU/BSD 扩展，标准 Windows C 运行时（MSVCRT/UCRT）并不提供此函数。
+- **解决方案**：自行实现轻量级的 `my_strcasestr`，在 Windows 下使用 `_strnicmp`，在 POSIX 下使用 `strncasecmp`。
+
+### 🔴 踩坑现象 2：GitHub Actions 上 Windows ARM64 交叉编译工具链
+- 传统 MSYS2 运行在 Windows runner 上极其缓慢且对 ARM64 交叉编译配置繁琐。
+- **解决方案**：
+  - 在 `ubuntu-latest` 上使用 `mstorsjo/setup-llvm-mingw@v3` 进行极速跨平台交叉编译。
+  - 工具链前缀：`x86_64-w64-mingw32` (x86_64) 与 `aarch64-w64-mingw32` (ARM64)。
+  - OpenSSL 静态编译目标：`mingw64` (x86_64) 与 `mingw-arm64` (ARM64)。
+  - 静态编译链接参数：`-static -lssl -lcrypto -lws2_32 -lgdi32 -lcrypt32 -lbcrypt -lpthread`。
+
+### 🔴 踩坑现象 3：Winsock 初始化与套接字类型
+- Windows 下 socket 必须在调用前执行 `WSAStartup(MAKEWORD(2, 2), &wsaData)`，并在程序退出时调用 `WSACleanup()`。
+- 关闭套接字在 POSIX 下使用 `close(fd)`，在 Windows 下必须使用 `closesocket(s)`。
+- 设置超时时间 `SO_RCVTIMEO`/`SO_SNDTIMEO` 时，POSIX 使用 `struct timeval`，而 Windows Winsock 使用 `DWORD`（毫秒整数）。
+
+
