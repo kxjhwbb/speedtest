@@ -51,30 +51,37 @@ jobs:
           - arch: aarch64
             target: aarch64-linux-gnu
             cross_pkg: gcc-aarch64-linux-gnu
-            cflags: "-O3 -flto -fomit-frame-pointer -march=armv8-a+crypto+crc"
+            openssl_target: linux-aarch64
+            cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: armhf
             target: arm-linux-gnueabihf
             cross_pkg: gcc-arm-linux-gnueabihf
-            cflags: "-O3 -flto -fomit-frame-pointer -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard"
+            openssl_target: linux-armv4
+            cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: armel
             target: arm-linux-gnueabi
             cross_pkg: gcc-arm-linux-gnueabi
-            cflags: "-O3 -flto -fomit-frame-pointer -march=armv5te"
+            openssl_target: linux-armv4
+            cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: mipsel
             target: mipsel-linux-gnu
             cross_pkg: gcc-mipsel-linux-gnu
+            openssl_target: linux-mips32
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: mips
             target: mips-linux-gnu
             cross_pkg: gcc-mips-linux-gnu
+            openssl_target: linux-mips32
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: riscv64
             target: riscv64-linux-gnu
             cross_pkg: gcc-riscv64-linux-gnu
+            openssl_target: linux64-riscv64
             cflags: "-O3 -flto -fomit-frame-pointer"
           - arch: i686
             target: i686-linux-gnu
             cross_pkg: gcc-i686-linux-gnu
+            openssl_target: linux-x86
             cflags: "-O3 -flto -fomit-frame-pointer -m32"
 
     steps:
@@ -88,25 +95,12 @@ jobs:
 
       - name: Build Static OpenSSL for Target Architecture
         run: |
-          # 快速克隆精简版 OpenSSL 源码并针对目标架构做极速静态构建 (约 30-40 秒)
           git clone --depth 1 -b openssl-3.2 https://github.com/openssl/openssl.git openssl-src
           cd openssl-src
-          
-          # 根据 target 映射 OpenSSL Configure 平台名
-          OPENSSL_ARCH=""
-          case "${{ matrix.arch }}" in
-            aarch64) OPENSSL_ARCH="linux-aarch64" ;;
-            armhf)   OPENSSL_ARCH="linux-armv4 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard" ;;
-            armel)   OPENSSL_ARCH="linux-armv4" ;;
-            mipsel)  OPENSSL_ARCH="linux-mips32" ;;
-            mips)    OPENSSL_ARCH="linux-mips32" ;;
-            riscv64) OPENSSL_ARCH="linux64-riscv64" ;;
-            i686)    OPENSSL_ARCH="linux-x86" ;;
-          esac
 
-          ./Configure ${OPENSSL_ARCH} \
+          ./Configure ${{ matrix.openssl_target }} \
             --cross-compile-prefix=${{ matrix.target }}- \
-            no-shared no-tests no-docs no-legacy no-engine no-ui-console \
+            no-shared no-tests no-docs no-legacy no-engine no-ui-console no-asm \
             --prefix=$GITHUB_WORKSPACE/openssl-target \
             --openssldir=$GITHUB_WORKSPACE/openssl-target
 
@@ -157,8 +151,8 @@ jobs:
         run: |
           OPENSSL_DIR=$(brew --prefix openssl@3)
           clang -O3 -Wall \
-            -I${OPENSSL_DIR}/include \
-            -L${OPENSSL_DIR}/lib \
+            -I"${OPENSSL_DIR}/include" \
+            -L"${OPENSSL_DIR}/lib" \
             speedtest.c -o bb-speedtest-darwin-${{ matrix.arch }} \
             -lssl -lcrypto -lpthread -lz
 
