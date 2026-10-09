@@ -29,7 +29,7 @@ jobs:
 
       - name: Compile Static Binary
         run: |
-          gcc -O3 -flto -fomit-frame-pointer -Wall speedtest.c -o bb-speedtest-linux-x86_64 -static -lssl -lcrypto -lz -lzstd -lpthread -ldl
+          gcc -O3 -flto -fomit-frame-pointer -Wall speedtest.c -o bb-speedtest-linux-x86_64 -static -lssl -lcrypto -latomic -lz -lzstd -lpthread -ldl
           strip bb-speedtest-linux-x86_64
           chmod +x bb-speedtest-linux-x86_64
           file bb-speedtest-linux-x86_64
@@ -129,16 +129,8 @@ jobs:
           path: bb-speedtest-linux-${{ matrix.arch }}
 
   build-macos:
-    name: Build macOS (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-13
-            arch: x86_64
-          - os: macos-latest
-            arch: arm64
+    name: Build macOS (Universal Binary)
+    runs-on: macos-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -147,24 +139,24 @@ jobs:
         run: |
           brew install openssl@3
 
-      - name: Compile macOS Binary
+      - name: Compile Native Apple Silicon Binary
         run: |
           OPENSSL_DIR=$(brew --prefix openssl@3)
           clang -O3 -Wall \
             -I"${OPENSSL_DIR}/include" \
             -L"${OPENSSL_DIR}/lib" \
-            speedtest.c -o bb-speedtest-darwin-${{ matrix.arch }} \
+            speedtest.c -o bb-speedtest-darwin-arm64 \
             -lssl -lcrypto -lpthread -lz
 
-          strip bb-speedtest-darwin-${{ matrix.arch }} || true
-          chmod +x bb-speedtest-darwin-${{ matrix.arch }}
-          file bb-speedtest-darwin-${{ matrix.arch }}
+          strip bb-speedtest-darwin-arm64 || true
+          chmod +x bb-speedtest-darwin-arm64
+          file bb-speedtest-darwin-arm64
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bb-speedtest-darwin-${{ matrix.arch }}
-          path: bb-speedtest-darwin-${{ matrix.arch }}
+          name: bb-speedtest-darwin-arm64
+          path: bb-speedtest-darwin-arm64
 
   release:
     name: Create GitHub Release
