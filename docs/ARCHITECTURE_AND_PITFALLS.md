@@ -1,5 +1,11 @@
 # 📘 bb-speedtest 架构设计与跨平台交叉编译避坑指南
 
+> **文档元数据 (Metadata)**:
+> - **作者 / Maintainer**: kxjhwbb & Antigravity AI
+> - **记录时间 / Timestamp**: 2026-10-09 13:47:00 (UTC+8)
+> - **版本 / Version**: v1.0.4
+> - **项目地址 / Repository**: https://github.com/kxjhwbb/speedtest
+>
 > **文档目的**：本文档沉淀了在构建极低损耗、全平台静态 C 语言测速工具（bb-speedtest）过程中的核心架构决策、底层网络调优技巧以及 GitHub Actions 多架构交叉编译的踩坑与避坑实战经验，供后续开发者与 AI 快速参考。
 
 ---
