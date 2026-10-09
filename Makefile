@@ -2,7 +2,7 @@ CC ?= gcc
 AARCH64_CC ?= aarch64-linux-gnu-gcc
 CFLAGS ?= -O3 -flto -fomit-frame-pointer -Wall
 AARCH64_CFLAGS ?= -O3 -flto -fomit-frame-pointer -march=armv8-a+crypto+crc -Wall
-LDFLAGS ?= -static -lssl -lcrypto -lz -lzstd -lpthread -ldl
+LDFLAGS ?= -static -lssl -lcrypto -latomic -lz -lzstd -lpthread -ldl
 
 TARGET_X86 = bb-speedtest-x86_64
 TARGET_ARM = bb-speedtest-aarch64

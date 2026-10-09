@@ -115,7 +115,7 @@ jobs:
             -L$GITHUB_WORKSPACE/openssl-target/lib \
             -L$GITHUB_WORKSPACE/openssl-target/lib64 \
             speedtest.c -o bb-speedtest-linux-${{ matrix.arch }} \
-            -static -lssl -lcrypto -lpthread -ldl
+            -static -lssl -lcrypto -latomic -lpthread -ldl
 
           ${{ matrix.target }}-strip bb-speedtest-linux-${{ matrix.arch }} || true
           chmod +x bb-speedtest-linux-${{ matrix.arch }}
