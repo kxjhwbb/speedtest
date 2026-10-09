@@ -116,6 +116,21 @@ collect2: error: ld returned 1 exit status
 
 ---
 
+### 🔴 踩坑现象 3：macOS 产物体积只有几十 KB 且跨设备报错 `dyld: Library not loaded`
+- **现象**：macOS 编译产物 `bb-speedtest-darwin-arm64` 体积仅 60KB 左右，复制到其他 Mac 上运行时报错 `dyld: Library not loaded: /opt/homebrew/opt/openssl@3/lib/libssl.3.dylib`。
+- **根本原因**：
+  - 在 macOS 下使用 `-L"${OPENSSL_DIR}/lib" -lssl -lcrypto` 时，Clang 默认优先动态链接 Homebrew 路径下的 `.dylib` 共享库。
+  - 二进制文件中只包含自身几十 KB 的测速逻辑代码，OpenSSL 协议栈并未打包进去。
+- **解决方案**：
+  - macOS 系统（Darwin）禁止全局静态链接系统库（不允许使用 `-static` 链接 `libSystem.B.dylib`），但**第三方库必须静态嵌入**。
+  - 直接在 Clang 命令行中传入 OpenSSL 静态库归档文件的绝对路径：
+    ```bash
+    clang speedtest.c "${OPENSSL_DIR}/lib/libssl.a" "${OPENSSL_DIR}/lib/libcrypto.a" -o bb-speedtest-darwin-arm64 -lpthread -lz
+    ```
+  - 打包后体积约为 3.5MB~4.5MB，使用 `otool -L` 检查可确认仅依赖系统级的 `/usr/lib/libSystem.B.dylib` 和 `/usr/lib/libz.1.dylib`，可以在任意 Apple Silicon Mac 上免安装依赖直接运行。
+
+---
+
 ## 5. 高性能网络测速引擎的损耗优化法则
 
 在 2.5G/万兆网络以及弱性能 ARM 路由器上测速时，程序本身的瓶颈主要不在网络线路上，而在于**系统调用损耗与内核缓冲区竞争**。
