@@ -1,0 +1,154 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (${{ matrix.target.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - arch: x86_64
+            cross_pkg: ""
+            cc: gcc
+            strip: strip
+            cflags: "-O3 -flto -fomit-frame-pointer"
+          - arch: aarch64
+            cross_pkg: "gcc-aarch64-linux-gnu"
+            cc: aarch64-linux-gnu-gcc
+            strip: aarch64-linux-gnu-strip
+            cflags: "-O3 -flto -fomit-frame-pointer -march=armv8-a+crypto+crc"
+          - arch: armhf
+            cross_pkg: "gcc-arm-linux-gnueabihf"
+            cc: arm-linux-gnueabihf-gcc
+            strip: arm-linux-gnueabihf-strip
+            cflags: "-O3 -flto -fomit-frame-pointer -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard"
+          - arch: armel
+            cross_pkg: "gcc-arm-linux-gnueabi"
+            cc: arm-linux-gnueabi-gcc
+            strip: arm-linux-gnueabi-strip
+            cflags: "-O3 -flto -fomit-frame-pointer -march=armv5te"
+          - arch: mipsel
+            cross_pkg: "gcc-mipsel-linux-gnu"
+            cc: mipsel-linux-gnu-gcc
+            strip: mipsel-linux-gnu-strip
+            cflags: "-O3 -flto -fomit-frame-pointer"
+          - arch: mips
+            cross_pkg: "gcc-mips-linux-gnu"
+            cc: mips-linux-gnu-gcc
+            strip: mips-linux-gnu-strip
+            cflags: "-O3 -flto -fomit-frame-pointer"
+          - arch: riscv64
+            cross_pkg: "gcc-riscv64-linux-gnu"
+            cc: riscv64-linux-gnu-gcc
+            strip: riscv64-linux-gnu-strip
+            cflags: "-O3 -flto -fomit-frame-pointer"
+          - arch: i686
+            cross_pkg: "gcc-i686-linux-gnu"
+            cc: i686-linux-gnu-gcc
+            strip: i686-linux-gnu-strip
+            cflags: "-O3 -flto -fomit-frame-pointer -m32"
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Toolchain and Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libzstd-dev
+          if [ -n "${{ matrix.target.cross_pkg }}" ]; then
+            sudo apt-get install -y ${{ matrix.target.cross_pkg }}
+          fi
+
+      - name: Compile Static Binary
+        run: |
+          ${{ matrix.target.cc }} ${{ matrix.target.cflags }} -Wall speedtest.c -o bb-speedtest-linux-${{ matrix.target.arch }} -static -lssl -lcrypto -lz -lzstd -lpthread -ldl || \
+          ${{ matrix.target.cc }} ${{ matrix.target.cflags }} -Wall speedtest.c -o bb-speedtest-linux-${{ matrix.target.arch }} -static -lssl -lcrypto -lpthread -ldl || \
+          ${{ matrix.target.cc }} ${{ matrix.target.cflags }} -Wall speedtest.c -o bb-speedtest-linux-${{ matrix.target.arch }} -lssl -lcrypto -lpthread -ldl
+
+          ${{ matrix.target.strip }} bb-speedtest-linux-${{ matrix.target.arch }} || true
+          chmod +x bb-speedtest-linux-${{ matrix.target.arch }}
+          file bb-speedtest-linux-${{ matrix.target.arch }}
+          ls -lh bb-speedtest-linux-${{ matrix.target.arch }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb-speedtest-linux-${{ matrix.target.arch }}
+          path: bb-speedtest-linux-${{ matrix.target.arch }}
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install OpenSSL
+        run: |
+          brew install openssl@3
+
+      - name: Compile macOS Binary
+        run: |
+          OPENSSL_DIR=$(brew --prefix openssl@3)
+          clang -O3 -Wall -target ${{ matrix.arch }}-apple-macos11 \
+            -I${OPENSSL_DIR}/include \
+            -L${OPENSSL_DIR}/lib \
+            speedtest.c -o bb-speedtest-darwin-${{ matrix.arch }} \
+            -lssl -lcrypto -lpthread -lz
+
+          strip bb-speedtest-darwin-${{ matrix.arch }} || true
+          chmod +x bb-speedtest-darwin-${{ matrix.arch }}
+          file bb-speedtest-darwin-${{ matrix.arch }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb-speedtest-darwin-${{ matrix.arch }}
+          path: bb-speedtest-darwin-${{ matrix.arch }}
+
+  release:
+    name: Create GitHub Release
+    needs: [build-linux, build-macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Organize Release Assets
+        run: |
+          mkdir -p release_files
+          find dist -type f -name "bb-speedtest-*" -exec cp {} release_files/ \;
+          cd release_files
+          sha256sum * > sha256sums.txt
+          ls -lh
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_files/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
