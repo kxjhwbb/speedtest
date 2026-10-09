@@ -142,11 +142,11 @@ collect2: error: ld returned 1 exit status
 - **解决方案**：自行实现轻量级的 `my_strcasestr`，在 Windows 下使用 `_strnicmp`，在 POSIX 下使用 `strncasecmp`。
 
 ### 🔴 踩坑现象 2：GitHub Actions 上 Windows ARM64 交叉编译工具链
-- 传统 MSYS2 运行在 Windows runner 上极其缓慢且对 ARM64 交叉编译配置繁琐。
+- 传统 MSYS2 运行在 Windows runner 上极其缓慢且对 ARM64 交叉编译配置繁琐，且 GitHub Actions 市场上没有现成的 `setup-llvm-mingw` 官方 Action。
 - **解决方案**：
-  - 在 `ubuntu-latest` 上使用 `mstorsjo/setup-llvm-mingw@v3` 进行极速跨平台交叉编译。
+  - 在 `ubuntu-latest` 上直接下载官方预编译的 `llvm-mingw`（基于 Ubuntu 22.04 的 ucrt tarball）并解压至 `/opt/llvm-mingw`，将 `bin` 加入 `$GITHUB_PATH`。
   - 工具链前缀：`x86_64-w64-mingw32` (x86_64) 与 `aarch64-w64-mingw32` (ARM64)。
-  - OpenSSL 静态编译目标：`mingw64` (x86_64) 与 `mingw-arm64` (ARM64)。
+  - OpenSSL 静态编译目标：统一使用 `mingw64` 配合 `no-asm` 与 `--cross-compile-prefix` 进行交叉构建。
   - 静态编译链接参数：`-static -lssl -lcrypto -lws2_32 -lgdi32 -lcrypt32 -lbcrypt -lpthread`。
 
 ### 🔴 踩坑现象 3：Winsock 初始化与套接字类型

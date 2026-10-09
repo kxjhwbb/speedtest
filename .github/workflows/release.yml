@@ -170,15 +170,20 @@ jobs:
             openssl_target: mingw64
           - arch: arm64
             target: aarch64-w64-mingw32
-            openssl_target: mingw-arm64
+            openssl_target: mingw64
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup LLVM MinGW
-        uses: mstorsjo/setup-llvm-mingw@v3
-        with:
-          target: ${{ matrix.target }}
+      - name: Install LLVM MinGW Cross-Compiler Toolchain
+        run: |
+          sudo apt-get update && sudo apt-get install -y xz-utils
+          URL="https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          curl -sL "$URL" -o /tmp/llvm-mingw.tar.xz
+          sudo mkdir -p /opt/llvm-mingw
+          sudo tar -xf /tmp/llvm-mingw.tar.xz -C /opt/llvm-mingw --strip-components=1
+          rm -f /tmp/llvm-mingw.tar.xz
+          echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
 
       - name: Build Static OpenSSL for Windows
         run: |
