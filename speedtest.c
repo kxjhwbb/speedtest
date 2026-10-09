@@ -400,13 +400,13 @@ static void* ping_worker(void *arg) {
 }
 
 static int fetch_servers(int max_limit) {
-    printf("🔍 Fetching Speedtest.net server list...\n");
+    printf("[*] Fetching Speedtest.net server list...\n");
     char path[128];
     snprintf(path, sizeof(path), "/api/js/servers?engine=js&limit=%d", max_limit);
 
     char *json = https_get_string("www.speedtest.net", "443", path);
     if (!json) {
-        fprintf(stderr, "⚠️  Failed to retrieve server list, please check your network.\n");
+        fprintf(stderr, "[!] Failed to retrieve server list, please check your network.\n");
         return 0;
     }
 
@@ -445,7 +445,7 @@ static int fetch_servers(int max_limit) {
 }
 
 static void ping_all_servers() {
-    printf("⚡ Measuring latency to %d candidate servers...\n", g_server_count);
+    printf("[*] Measuring latency to %d candidate servers...\n", g_server_count);
     pthread_t threads[MAX_SERVERS];
     ping_task_t tasks[MAX_SERVERS];
 
@@ -752,11 +752,10 @@ static double run_benchmark(int is_upload, int threads, int duration, int timeou
 
     double block_size_mb = (double)g_block_size / (1024.0 * 1024.0);
     const char *action_str = is_upload ? "Upload" : "Download";
-    const char *icon_str = is_upload ? "📤" : "📥";
 
     printf("------------------------------------------------------------\n");
-    printf("%s Running %s Speed Test...\n", icon_str, action_str);
-    printf("⚙️  Threads: %d | Block: %.2f MB | Duration: %d seconds\n", threads, block_size_mb, duration);
+    printf("[*] Running %s Speed Test...\n", action_str);
+    printf("    Threads: %d | Block: %.2f MB | Duration: %d seconds\n", threads, block_size_mb, duration);
     printf("------------------------------------------------------------\n");
 
     pthread_t *thread_handles = malloc(sizeof(pthread_t) * threads);
@@ -794,7 +793,7 @@ static double run_benchmark(int is_upload, int threads, int duration, int timeou
         double speed_mbs = (delta_time > 0) ? delta_bytes / (delta_time * 1024.0 * 1024.0) : 0.0;
         double blocks_float = (double)current_bytes / (double)g_block_size;
 
-        printf("\r⏱️  %s Progress: %02ds/%ds | Current: %6.2f Mbps (%5.2f MB/s) | 📦 Blocks: %5.1f (Full: %u)",
+        printf("\r[*] %s Progress: %02ds/%ds | Current: %6.2f Mbps (%5.2f MB/s) | Blocks: %5.1f (Full: %u)",
                action_str, (int)elapsed, duration, speed_mbps, speed_mbs, blocks_float, completed_count);
         fflush(stdout);
 
@@ -822,7 +821,7 @@ static double run_benchmark(int is_upload, int threads, int duration, int timeou
     double total_mb = final_bytes / (1024.0 * 1024.0);
     double total_blocks = (double)final_bytes / (double)g_block_size;
 
-    printf("\n  ↳ %s Finished: Avg %6.2f Mbps (%5.2f MB/s) | Transferred: %.2f MB (%.2f blocks)\n\n",
+    printf("\n  -> %s Finished: Avg %6.2f Mbps (%5.2f MB/s) | Transferred: %.2f MB (%.2f blocks)\n\n",
            action_str, avg_mbps, avg_mbs, total_mb, total_blocks);
 
     free(thread_handles);
@@ -864,6 +863,8 @@ int main(int argc, char *argv[]) {
     memset(g_upload_buf, 'x', sizeof(g_upload_buf));
 
 #ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         fprintf(stderr, "WSAStartup failed\n");
@@ -947,7 +948,7 @@ int main(int argc, char *argv[]) {
     if (strlen(g_url) == 0) {
         int cnt = fetch_servers(20);
         if (cnt == 0) {
-            printf("⚠️  Using default HKBN endpoint for speedtest\n");
+            printf("[!] Using default HKBN endpoint for speedtest\n");
             strcpy(g_url, "https://speedtest21.hkbn.net.prod.hosts.ooklaserver.net:8080/download?size=25000000");
         } else {
             if (list_mode) {
@@ -969,14 +970,14 @@ int main(int argc, char *argv[]) {
                     }
                 }
                 if (selected_idx < 0) {
-                    fprintf(stderr, "❌ Server ID %s not found! Use -L to view available servers.\n", target_id);
+                    fprintf(stderr, "[!] Server ID %s not found! Use -L to view available servers.\n", target_id);
                     SSL_CTX_free(g_ssl_ctx);
 #ifdef _WIN32
                     WSACleanup();
 #endif
                     return 1;
                 }
-                printf("📶 Measuring latency to specified server...\n");
+                printf("[*] Measuring latency to specified server...\n");
                 g_servers[selected_idx].ping_ms = measure_latency(g_servers[selected_idx].host);
             } else {
                 ping_all_servers();
@@ -997,14 +998,14 @@ int main(int argc, char *argv[]) {
     parse_url(g_url);
 
     printf("============================================================\n");
-    printf("🚀 bb-speedtest (High Performance Native C Edition)\n");
+    printf("* bb-speedtest (High Performance Native C Edition)\n");
     if (selected_server) {
-        printf("🎯 Target Server: [%s] %s (%s, %s)\n", selected_server->id, selected_server->sponsor, selected_server->name, selected_server->country);
-        printf("📶 Server Latency: %.2f ms\n", selected_server->ping_ms);
+        printf("* Target Server: [%s] %s (%s, %s)\n", selected_server->id, selected_server->sponsor, selected_server->name, selected_server->country);
+        printf("* Server Latency: %.2f ms\n", selected_server->ping_ms);
     } else {
-        printf("📌 Target URL: %s\n", g_url);
+        printf("* Target URL: %s\n", g_url);
     }
-    printf("🛠️  Test Mode: %s\n", only_upload ? "Upload Only" : (test_upload ? "Full Duplex (Download + Upload)" : "Default (Download Only)"));
+    printf("* Test Mode: %s\n", only_upload ? "Upload Only" : (test_upload ? "Full Duplex (Download + Upload)" : "Default (Download Only)"));
     printf("============================================================\n");
 
     uint64_t dl_bytes = 0, ul_bytes = 0;
@@ -1020,16 +1021,16 @@ int main(int argc, char *argv[]) {
     }
 
     printf("============================================================\n");
-    printf("📊 Benchmark Summary:\n");
+    printf("[+] Benchmark Summary:\n");
     if (selected_server) {
-        printf("  • Server: [%s] %s | Latency: %.2f ms\n", selected_server->id, selected_server->sponsor, selected_server->ping_ms);
+        printf("  * Server: [%s] %s | Latency: %.2f ms\n", selected_server->id, selected_server->sponsor, selected_server->ping_ms);
     }
     if (!only_upload) {
-        printf("  • 📥 Download: %8.2f Mbps (%6.2f MB/s) | Transferred: %7.2f MB (%u full blocks)\n",
+        printf("  * Download: %8.2f Mbps (%6.2f MB/s) | Transferred: %7.2f MB (%u full blocks)\n",
                dl_speed, dl_speed / 8.0, (double)dl_bytes / (1024.0 * 1024.0), dl_comp);
     }
     if (test_upload) {
-        printf("  • 📤 Upload:   %8.2f Mbps (%6.2f MB/s) | Transferred: %7.2f MB (%u full blocks)\n",
+        printf("  * Upload:   %8.2f Mbps (%6.2f MB/s) | Transferred: %7.2f MB (%u full blocks)\n",
                ul_speed, ul_speed / 8.0, (double)ul_bytes / (1024.0 * 1024.0), ul_comp);
     }
     printf("============================================================\n");

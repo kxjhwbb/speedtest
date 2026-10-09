@@ -61,3 +61,4 @@ YYYYMMDD-HHMMSS-brief-topic-title.md
 | 05 | [`20261009-140000-high-performance-network-engine-tuning.md`](20261009-140000-high-performance-network-engine-tuning.md) | 极低损耗 C 语言测速引擎底层调优法则 (2MB Socket / 批量原子) | 2026-10-09 14:00:00 |
 | 06 | [`20261009-141200-windows-arm64-llvm-mingw-and-winsock-compatibility.md`](20261009-141200-windows-arm64-llvm-mingw-and-winsock-compatibility.md) | Windows 与 Windows ARM64 llvm-mingw 交叉编译及 Winsock 兼容 | 2026-10-09 14:12:00 |
 | 07 | [`20261009-143000-github-actions-cache-acceleration.md`](20261009-143000-github-actions-cache-acceleration.md) | GitHub Actions 多架构依赖缓存加速 (3分钟降至20秒) | 2026-10-09 14:30:00 |
+| 08 | [`20261009-143500-windows-console-utf8-codepage-and-emoji-mojibake.md`](20261009-143500-windows-console-utf8-codepage-and-emoji-mojibake.md) | Windows 控制台 UTF-8 代码页与 Emoji 乱码陷阱 | 2026-10-09 14:35:00 |
