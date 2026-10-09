@@ -97,7 +97,7 @@ static void sigint_handler(int sig) {
     g_running = 0;
 }
 
-// 跨平台线程安全随机数生成 (Xorshift32)
+// Cross-platform thread-safe PRNG (Xorshift32)
 static inline uint32_t fast_rand(unsigned int *seed) {
     uint32_t x = *seed;
     if (x == 0) x = (uint32_t)(uintptr_t)seed ^ 0x5bf03635;
