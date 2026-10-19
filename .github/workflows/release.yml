@@ -11,20 +11,50 @@ permissions:
 
 jobs:
   build-linux-x86_64:
-    name: Build Linux (x86_64)
+    name: Build Linux (x86_64 Musl Static)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Musl Toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libzstd-dev
+          sudo apt-get install -y build-essential musl-tools
+          sudo ln -sf /usr/include/linux /usr/include/x86_64-linux-musl/linux
+          sudo ln -sf /usr/include/asm-generic /usr/include/x86_64-linux-musl/asm-generic
+          sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl/asm
 
-      - name: Compile Static Binary
+      - name: Restore Cached OpenSSL for x86_64 Musl
+        id: cache-openssl-musl
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/openssl-musl-x86_64
+          key: openssl-3.2-musl-x86_64-v1
+
+      - name: Build Static OpenSSL with Musl
+        if: steps.cache-openssl-musl.outputs.cache-hit != 'true'
         run: |
-          gcc -O3 -flto -fomit-frame-pointer -Wall speedtest.c -o bb-speedtest-linux-x86_64 -static -lssl -lcrypto -latomic -lz -lzstd -lpthread -ldl
+          git clone --depth 1 -b openssl-3.2 https://github.com/openssl/openssl.git openssl-src
+          cd openssl-src
+          CC=musl-gcc ./Configure linux-x86_64 \
+            no-shared no-tests no-docs no-legacy no-engine no-ui-console \
+            --prefix=$GITHUB_WORKSPACE/openssl-musl-x86_64 \
+            --openssldir=$GITHUB_WORKSPACE/openssl-musl-x86_64
+          make -j$(nproc) build_libs
+          make install_dev
+          cd ..
+
+      - name: Compile True Static Binary with Musl
+        run: |
+          musl-gcc -O3 -flto -fomit-frame-pointer -Wall \
+            -I$GITHUB_WORKSPACE/openssl-musl-x86_64/include \
+            speedtest.c \
+            $GITHUB_WORKSPACE/openssl-musl-x86_64/lib64/libssl.a \
+            $GITHUB_WORKSPACE/openssl-musl-x86_64/lib64/libcrypto.a \
+            -o bb-speedtest-linux-x86_64 \
+            -static -lpthread
+
           strip bb-speedtest-linux-x86_64
           chmod +x bb-speedtest-linux-x86_64
           file bb-speedtest-linux-x86_64
