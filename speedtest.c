@@ -55,6 +55,7 @@ static const char* my_strcasestr(const char *haystack, const char *needle) {
     return NULL;
 }
 
+#define APP_VERSION "1.1.5"
 #define MAX_SERVERS 64
 #define DEFAULT_BLOCK_SIZE 25000000ULL
 #define BUF_SIZE (128 * 1024)
@@ -842,7 +843,8 @@ static void print_usage(const char *prog) {
     printf("  -t <threads>  Number of concurrent streams/threads (Default: 4)\n");
     printf("  -T <sec>      Socket connection timeout in seconds (Default: 10)\n");
     printf("  -b <bytes>    Block size in bytes for stats (Default: 25000000)\n");
-    printf("  -h            Show this help message\n\n");
+    printf("  -v, --version Show version information\n");
+    printf("  -h, --help    Show this help message\n\n");
     printf("Examples:\n");
     printf("  %s                   # Default: auto-select best server & test download\n", prog);
     printf("  %s -U                # Full test: download + upload\n", prog);
@@ -876,12 +878,30 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[i], "--only-upload") == 0) {
             only_upload = 1;
             test_upload = 1;
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+            printf("bb-speedtest version %s\n", APP_VERSION);
+#ifdef _WIN32
+            WSACleanup();
+#endif
+            return 0;
+        } else if (strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+#ifdef _WIN32
+            WSACleanup();
+#endif
+            return 0;
         }
     }
 
     int opt;
-    while ((opt = getopt(argc, argv, "ULs:u:d:t:T:b:h")) != -1) {
+    while ((opt = getopt(argc, argv, "ULs:u:d:t:T:b:hvn")) != -1) {
         switch (opt) {
+            case 'v':
+                printf("bb-speedtest version %s\n", APP_VERSION);
+#ifdef _WIN32
+                WSACleanup();
+#endif
+                return 0;
             case 'U':
                 test_upload = 1;
                 break;
@@ -998,7 +1018,7 @@ int main(int argc, char *argv[]) {
     parse_url(g_url);
 
     printf("============================================================\n");
-    printf("* bb-speedtest (High Performance Native C Edition)\n");
+    printf("* bb-speedtest v%s (High Performance Native C Edition)\n", APP_VERSION);
     if (selected_server) {
         printf("* Target Server: [%s] %s (%s, %s)\n", selected_server->id, selected_server->sponsor, selected_server->name, selected_server->country);
         printf("* Server Latency: %.2f ms\n", selected_server->ping_ms);

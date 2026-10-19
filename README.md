@@ -86,7 +86,8 @@ Options:
   -t <threads>  Number of concurrent streams/threads (Default: 4)
   -T <sec>      Socket connection timeout in seconds (Default: 10)
   -b <bytes>    Block size in bytes for stats (Default: 25000000)
-  -h            Show this help message
+  -v, --version Show version information
+  -h, --help    Show this help message
 ```
 
 ---
