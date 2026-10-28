@@ -64,3 +64,4 @@ YYYYMMDD-HHMMSS-brief-topic-title.md
 | 08 | [`20261009-143500-windows-console-utf8-codepage-and-emoji-mojibake.md`](20261009-143500-windows-console-utf8-codepage-and-emoji-mojibake.md) | Windows 控制台 UTF-8 代码页与 Emoji 乱码陷阱 | 2026-10-09 14:35:00 |
 | 09 | [`20261009-143900-arm64-crypto-assembly-hardware-acceleration.md`](20261009-143900-arm64-crypto-assembly-hardware-acceleration.md) | ARM64 硬件加密扩展 (ARMv8 Crypto) 汇编加速与 300M 性能瓶颈陷阱 | 2026-10-09 14:39:00 |
 | 10 | [`20261019-103500-glibc-static-linking-nss-sigfpe-and-musl-solution.md`](20261019-103500-glibc-static-linking-nss-sigfpe-and-musl-solution.md) | Glibc 静态编译 getaddrinfo 触发 SIGFPE 崩溃与 Musl 终极静态方案 | 2026-10-19 10:35:00 |
+| 11 | [`20261028-090500-posix-getopt-double-dash-long-options.md`](20261028-090500-posix-getopt-double-dash-long-options.md) | POSIX getopt 双横杠长选项解析失败与 getopt_long 升级实践 | 2026-10-28 09:05:00 |

@@ -77,8 +77,8 @@ chmod +x bb-speedtest
 ```text
 Usage: ./bb-speedtest [options]
 Options:
-  -U            Enable upload test (Default: download only. Performs download then upload)
-  --only-upload Upload test only (Skip download test)
+  -U, --upload  Enable upload test (Default: download only. Performs download then upload)
+  -O, --only-upload Upload test only (Skip download test)
   -L            List nearby Speedtest servers and their latencies
   -s <ID>       Specify a Speedtest server ID manually
   -u <URL>      Specify a custom download URL directly

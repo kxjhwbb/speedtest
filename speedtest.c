@@ -9,12 +9,12 @@
 #include <signal.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 
 #ifdef _WIN32
   #include <winsock2.h>
   #include <ws2tcpip.h>
   #include <windows.h>
-  #include <getopt.h>
   #define CLOSE_SOCKET closesocket
   #define SLEEP_SEC(s) Sleep((s) * 1000)
   #define USLEEP(us) Sleep((us) / 1000)
@@ -55,7 +55,7 @@ static const char* my_strcasestr(const char *haystack, const char *needle) {
     return NULL;
 }
 
-#define APP_VERSION "1.1.5"
+#define APP_VERSION "1.1.6"
 #define MAX_SERVERS 64
 #define DEFAULT_BLOCK_SIZE 25000000ULL
 #define BUF_SIZE (128 * 1024)
@@ -834,8 +834,8 @@ static double run_benchmark(int is_upload, int threads, int duration, int timeou
 static void print_usage(const char *prog) {
     printf("Usage: %s [options]\n", prog);
     printf("Options:\n");
-    printf("  -U            Enable upload test (Default: download only. Performs download then upload)\n");
-    printf("  --only-upload Upload test only (Skip download test)\n");
+    printf("  -U, --upload  Enable upload test (Default: download only. Performs download then upload)\n");
+    printf("  -O, --only-upload Upload test only (Skip download test)\n");
     printf("  -L            List nearby Speedtest servers and their latencies\n");
     printf("  -s <ID>       Specify a Speedtest server ID manually\n");
     printf("  -u <URL>      Specify a custom download URL directly\n");
@@ -848,6 +848,7 @@ static void print_usage(const char *prog) {
     printf("Examples:\n");
     printf("  %s                   # Default: auto-select best server & test download\n", prog);
     printf("  %s -U                # Full test: download + upload\n", prog);
+    printf("  %s -O                # Upload test only\n", prog);
     printf("  %s -L                # List available nearby servers & latencies\n", prog);
     printf("  %s -s 65463 -U       # Test HKBN server (ID: 65463) with upload & download\n", prog);
     printf("  %s -d 15 -t 4        # 4 streams for 15 seconds\n", prog);
@@ -874,28 +875,28 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--only-upload") == 0) {
-            only_upload = 1;
-            test_upload = 1;
-        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
-            printf("bb-speedtest version %s\n", APP_VERSION);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return 0;
-        } else if (strcmp(argv[i], "--help") == 0) {
-            print_usage(argv[0]);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return 0;
-        }
-    }
+    static struct option long_options[] = {
+        {"only-upload", no_argument,       0, 'O'},
+        {"upload",      no_argument,       0, 'U'},
+        {"version",     no_argument,       0, 'v'},
+        {"help",        no_argument,       0, 'h'},
+        {"list",        no_argument,       0, 'L'},
+        {"server",      required_argument, 0, 's'},
+        {"url",         required_argument, 0, 'u'},
+        {"duration",    required_argument, 0, 'd'},
+        {"threads",     required_argument, 0, 't'},
+        {"timeout",     required_argument, 0, 'T'},
+        {"block-size",  required_argument, 0, 'b'},
+        {0, 0, 0, 0}
+    };
 
     int opt;
-    while ((opt = getopt(argc, argv, "ULs:u:d:t:T:b:hvn")) != -1) {
+    while ((opt = getopt_long(argc, argv, "ULOs:u:d:t:T:b:hv", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'O':
+                only_upload = 1;
+                test_upload = 1;
+                break;
             case 'v':
                 printf("bb-speedtest version %s\n", APP_VERSION);
 #ifdef _WIN32
@@ -931,12 +932,17 @@ int main(int argc, char *argv[]) {
                 if (g_block_size == 0) g_block_size = DEFAULT_BLOCK_SIZE;
                 break;
             case 'h':
-            default:
                 print_usage(argv[0]);
 #ifdef _WIN32
                 WSACleanup();
 #endif
                 return 0;
+            default:
+                print_usage(argv[0]);
+#ifdef _WIN32
+                WSACleanup();
+#endif
+                return 1;
         }
     }
 
