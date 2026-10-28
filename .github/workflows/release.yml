@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/openssl-musl-x86_64
-          key: openssl-3.2-musl-x86_64-v1
+          key: openssl-3.2-musl-x86_64-u22
 
       - name: Build Static OpenSSL with Musl
         if: steps.cache-openssl-musl.outputs.cache-hit != 'true'
@@ -131,7 +131,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/openssl-target
-          key: openssl-3.2-v2-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_target }}-${{ matrix.openssl_asm_flag }}
+          key: openssl-3.2-u22-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_target }}-${{ matrix.openssl_asm_flag }}
 
       - name: Build Static OpenSSL for Target Architecture
         if: steps.cache-openssl.outputs.cache-hit != 'true'
@@ -247,7 +247,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/openssl-target
-          key: openssl-win-3.2-v2-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_asm_flag }}
+          key: openssl-win-3.2-u22-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.openssl_asm_flag }}
 
       - name: Build Static OpenSSL for Windows
         if: steps.cache-openssl-win.outputs.cache-hit != 'true'

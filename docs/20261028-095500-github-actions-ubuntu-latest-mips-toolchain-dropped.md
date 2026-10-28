@@ -67,6 +67,11 @@ Error: Process completed with exit code 100.
 ### 3. 同步固定 Windows 与 Musl 构建环境
 避免依赖环境在未来新版 Ubuntu 镜像中发生底层 glibc 或交叉库兼容性劣化。
 
+### 4. 切勿遗漏 actions/cache 缓存键失效 (Cache Invalidation)
+> [!WARNING] 跨系统 Runner 切换必踩的二级暗坑
+> 如果工作流中使用了 `actions/cache` 缓存编译好的静态 OpenSSL 库，切换 Runner 到 `ubuntu-22.04` 时必须同步更新缓存键（如 `openssl-3.2-u22-...`）。
+> 否则系统会复用此前在 Ubuntu 24.04/26.04 上由较新 glibc 编译的 `libcrypto.a`，该库引用了 C23 新增符号（如 `__isoc23_strtoul`、`__isoc23_sscanf`），当在 Ubuntu 22.04（glibc 2.35）上静态链接时，将引发大量 `undefined reference to '__isoc23_*'` 链接失败错误。
+
 ---
 
 ## 🧪 4. 验证方式 (Verification)
